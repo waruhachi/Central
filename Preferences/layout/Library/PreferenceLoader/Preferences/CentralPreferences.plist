@@ -5,11 +5,11 @@
 	<key>entry</key>
 	<dict>
 		<key>bundle</key>
-		<string>Centralprefs</string>
+		<string>CentralPreferences</string>
 		<key>cell</key>
 		<string>PSLinkCell</string>
 		<key>detail</key>
-		<string>CRLRootListController</string>
+		<string>CentralRootListController</string>
 		<key>icon</key>
 		<string>icon.png</string>
 		<key>isController</key>
