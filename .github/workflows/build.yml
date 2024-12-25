@@ -11,14 +11,14 @@ jobs:
             - uses: actions/checkout@main
 
             - name: Cache Theos
-              id: cache-theos
+              id: theosCache
               uses: actions/cache@main
               with:
                   path: theos
                   key: theos
 
             - name: Checkout theos/theos
-              if: steps.cache-theos.outputs.cache-hit != 'true'
+              if: steps.theosCache.outputs.cache-hit != 'true'
               uses: actions/checkout@main
               with:
                   repository: theos/theos
@@ -27,7 +27,7 @@ jobs:
                   path: theos
 
             - name: Checkout theos/sdks
-              if: steps.cache-theos.outputs.cache-hit != 'true'
+              if: steps.theosCache.outputs.cache-hit != 'true'
               uses: actions/checkout@main
               with:
                   repository: theos/sdks
@@ -35,15 +35,30 @@ jobs:
 
             - name: Install Build Dependencies
               run: |
-                  brew list make || brew install make; brew list xz || brew install xz; brew list ldid || brew install ldid
+                  brew list make >/dev/null 2>&1 || brew install make
+                  brew list xz >/dev/null 2>&1 || brew install xz
+                  brew list ldid >/dev/null 2>&1 || brew install ldid
 
-            - name: Build Package
+            - name: Extract Version from Control File
               run: |
-                  export THEOS=theos
-                  gmake clean package FINALPACKAGE=1
-                  gmake clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+                  export VERSION=$(grep '^Version:' packages/control | cut -d ' ' -f 2)
+                  echo "VERSION=$VERSION" >> $GITHUB_ENV
+              shell: bash
 
             - name: Upload Build Artifacts
               uses: actions/upload-artifact@v4
               with:
                   path: packages/*.deb
+
+            - name: Create GitHub Release
+              uses: actions/create-release@v1
+              with:
+                  tag_name: v${{ env.VERSION }}
+                  release_name: Release v${{ env.VERSION }}
+                  body: |
+                      This release includes:
+                      - Artifacts built from the latest workflow.
+                  draft: false
+                  prerelease: false
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
