@@ -39,15 +39,28 @@ jobs:
                   brew list xz >/dev/null 2>&1 || brew install xz
                   brew list ldid >/dev/null 2>&1 || brew install ldid
 
+            - name: Extract Name from Control File
+              id: name
+              run: |
+                  NAME=$(grep '^Name:' control | cut -d ' ' -f 2)
+                  echo "NAME=$NAME" >> "$GITHUB_OUTPUT"
+
             - name: Extract Version from Control File
               id: version
               run: |
-                  VERSION=$(grep '^Version:' packages/control | cut -d ' ' -f 2)
+                  VERSION=$(grep '^Version:' control | cut -d ' ' -f 2)
                   echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
+            - name: Build Package
+              run: |
+                  export THEOS=theos
+                  gmake clean package FINALPACKAGE=1
+                  gmake clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
 
             - name: Upload Build Artifacts
               uses: actions/upload-artifact@v4
               with:
+                  name: ${{ steps.name.outputs.NAME }}_v${{ steps.version.outputs.VERSION }}
                   path: packages/*.deb
 
             - name: Create GitHub Release
