@@ -52,22 +52,43 @@ jobs:
                   echo "VERSION=$(grep '^Version:' control | cut -d ' ' -f 2)" >> "$GITHUB_OUTPUT"
                   echo "PACKAGE=$(grep '^Package:' control | cut -d ' ' -f 2)" >> "$GITHUB_OUTPUT"
 
+            - name: Compute Hashes
+              id: hashes
+              run: |
+                  FILE1="./packages/${{ steps.control.outputs.PACKAGE }}_${{ steps.control.outputs.VERSION }}_iphoneos-arm.deb"
+                  FILE2="./packages/${{ steps.control.outputs.PACKAGE }}_${{ steps.control.outputs.VERSION }}_iphoneos-arm64.deb"
+
+                  echo "MD5SUM_ARM=$(md5 -q "$FILE1")" >> "$GITHUB_OUTPUT"
+                  echo "SHA1_ARM=$(shasum -a 1 "$FILE1" | awk '{ print $1 }')" >> "$GITHUB_OUTPUT"
+                  echo "SHA256_ARM=$(shasum -a 256 "$FILE1" | awk '{ print $1 }')" >> "$GITHUB_OUTPUT"
+
+                  echo "MD5SUM_ARM64=$(md5 -q "$FILE2")" >> "$GITHUB_OUTPUT"
+                  echo "SHA1_ARM64=$(shasum -a 1 "$FILE2" | awk '{ print $1 }')" >> "$GITHUB_OUTPUT"
+                  echo "SHA256_ARM64=$(shasum -a 256 "$FILE2" | awk '{ print $1 }')" >> "$GITHUB_OUTPUT"
+
             - name: Upload Build Artifacts
               uses: actions/upload-artifact@main
               with:
                   name: ${{ steps.control.outputs.NAME }}_v${{ steps.control.outputs.VERSION }}
                   path: |
-                      ./packages/${{ steps.control.outputs.package }}_${{ steps.control.outputs.version }}_iphoneos-arm.deb
-                      ./packages/${{ steps.control.outputs.package }}_${{ steps.control.outputs.version }}_iphoneos-arm64.deb
+                      ./packages/${{ steps.control.outputs.PACKAGE }}_${{ steps.control.outputs.VERSION }}_iphoneos-arm.deb
+                      ./packages/${{ steps.control.outputs.PACKAGE }}_${{ steps.control.outputs.VERSION }}_iphoneos-arm64.deb
 
             - name: Create GitHub Release
               uses: actions/create-release@main
               with:
-                  tag_name: v${{ steps.control.outputs.version }}
-                  release_name: Release v${{ steps.control.outputs.version }}
+                  tag_name: v${{ steps.control.outputs.VERSION }}
+                  release_name: Release v${{ steps.control.outputs.VERSION }}
                   body: |
-                      This release includes:
-                      - Artifacts built from the latest workflow.
+                      iphoneos-arm:
+                      MD5sum: ${{ steps.hashes.outputs.MD5SUM_ARM }}
+                      SHA1: ${{ steps.hashes.outputs.SHA1_ARM }}
+                      SHA256: ${{ steps.hashes.outputs.SHA256_ARM }}
+
+                      iphoneos-arm64:
+                      MD5sum: ${{ steps.hashes.outputs.MD5SUM_ARM64 }}
+                      SHA1: ${{ steps.hashes.outputs.SHA1_ARM64 }}
+                      SHA256: ${{ steps.hashes.outputs.SHA256_ARM64 }}
                   draft: false
                   prerelease: false
               env:
@@ -75,7 +96,7 @@ jobs:
 
             - name: Upload Release Assets
               run: |
-                  gh release upload "v${{ steps.control.outputs.version }}" packages/*.deb
+                  gh release upload "v${{ steps.control.outputs.VERSION }}" packages/*.deb
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   shell: bash
