@@ -39,35 +39,32 @@ jobs:
                   brew list xz >/dev/null 2>&1 || brew install xz
                   brew list ldid >/dev/null 2>&1 || brew install ldid
 
-            - name: Extract Name from Control File
-              id: name
-              run: |
-                  NAME=$(grep '^Name:' control | cut -d ' ' -f 2)
-                  echo "NAME=$NAME" >> "$GITHUB_OUTPUT"
-
-            - name: Extract Version from Control File
-              id: version
-              run: |
-                  VERSION=$(grep '^Version:' control | cut -d ' ' -f 2)
-                  echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
-
             - name: Build Package
               run: |
                   export THEOS=theos
                   gmake clean package FINALPACKAGE=1
                   gmake clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
 
+            - name: Extract Variables from Control File
+              id: control
+              run: |
+                  echo "NAME=$(grep '^Name:' control | cut -d ' ' -f 2)" >> "$GITHUB_OUTPUT"
+                  echo "VERSION=$(grep '^Version:' control | cut -d ' ' -f 2)" >> "$GITHUB_OUTPUT"
+                  echo "PACKAGE=$(grep '^Package:' control | cut -d ' ' -f 2)" >> "$GITHUB_OUTPUT"
+
             - name: Upload Build Artifacts
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@main
               with:
-                  name: ${{ steps.name.outputs.NAME }}_v${{ steps.version.outputs.VERSION }}
-                  path: packages/*.deb
+                  name: ${{ steps.control.outputs.NAME }}_v${{ steps.control.outputs.VERSION }}
+                  path: |
+                      ./packages/${{ steps.control.outputs.package }}_${{ steps.control.outputs.version }}_iphoneos-arm.deb
+                      ./packages/${{ steps.control.outputs.package }}_${{ steps.control.outputs.version }}_iphoneos-arm64.deb
 
             - name: Create GitHub Release
-              uses: actions/create-release@v1
+              uses: actions/create-release@main
               with:
-                  tag_name: v${{ steps.version.outputs.version }}
-                  release_name: Release v${{ steps.version.outputs.version }}
+                  tag_name: v${{ steps.control.outputs.version }}
+                  release_name: Release v${{ steps.control.outputs.version }}
                   body: |
                       This release includes:
                       - Artifacts built from the latest workflow.
@@ -75,3 +72,10 @@ jobs:
                   prerelease: false
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Upload Release Assets
+              run: |
+                  gh release upload "v${{ steps.control.outputs.version }}" packages/*.deb
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  shell: bash
