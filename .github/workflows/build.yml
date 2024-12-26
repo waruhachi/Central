@@ -1,0 +1,102 @@
+name: Build
+
+on:
+    push:
+    workflow_dispatch:
+
+jobs:
+    build:
+        runs-on: macos-latest
+        steps:
+            - uses: actions/checkout@main
+
+            - name: Cache Theos
+              id: theosCache
+              uses: actions/cache@main
+              with:
+                  path: theos
+                  key: theos
+
+            - name: Checkout theos/theos
+              if: steps.theosCache.outputs.cache-hit != 'true'
+              uses: actions/checkout@main
+              with:
+                  repository: theos/theos
+                  ref: master
+                  submodules: recursive
+                  path: theos
+
+            - name: Checkout theos/sdks
+              if: steps.theosCache.outputs.cache-hit != 'true'
+              uses: actions/checkout@main
+              with:
+                  repository: theos/sdks
+                  path: theos/sdks
+
+            - name: Install Build Dependencies
+              run: |
+                  brew list make >/dev/null 2>&1 || brew install make
+                  brew list xz >/dev/null 2>&1 || brew install xz
+                  brew list ldid >/dev/null 2>&1 || brew install ldid
+
+            - name: Build Package
+              run: |
+                  export THEOS=theos
+                  gmake clean package FINALPACKAGE=1
+                  gmake clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+
+            - name: Extract Variables from Control File
+              id: control
+              run: |
+                  echo "NAME=$(grep '^Name:' control | cut -d ' ' -f 2)" >> "$GITHUB_OUTPUT"
+                  echo "VERSION=$(grep '^Version:' control | cut -d ' ' -f 2)" >> "$GITHUB_OUTPUT"
+                  echo "PACKAGE=$(grep '^Package:' control | cut -d ' ' -f 2)" >> "$GITHUB_OUTPUT"
+
+            - name: Compute Hashes
+              id: hashes
+              run: |
+                  FILE1="./packages/${{ steps.control.outputs.PACKAGE }}_${{ steps.control.outputs.VERSION }}_iphoneos-arm.deb"
+                  FILE2="./packages/${{ steps.control.outputs.PACKAGE }}_${{ steps.control.outputs.VERSION }}_iphoneos-arm64.deb"
+
+                  echo "MD5SUM_ARM=$(md5 -q "$FILE1")" >> "$GITHUB_OUTPUT"
+                  echo "SHA1_ARM=$(shasum -a 1 "$FILE1" | awk '{ print $1 }')" >> "$GITHUB_OUTPUT"
+                  echo "SHA256_ARM=$(shasum -a 256 "$FILE1" | awk '{ print $1 }')" >> "$GITHUB_OUTPUT"
+
+                  echo "MD5SUM_ARM64=$(md5 -q "$FILE2")" >> "$GITHUB_OUTPUT"
+                  echo "SHA1_ARM64=$(shasum -a 1 "$FILE2" | awk '{ print $1 }')" >> "$GITHUB_OUTPUT"
+                  echo "SHA256_ARM64=$(shasum -a 256 "$FILE2" | awk '{ print $1 }')" >> "$GITHUB_OUTPUT"
+
+            - name: Upload Build Artifacts
+              uses: actions/upload-artifact@main
+              with:
+                  name: ${{ steps.control.outputs.NAME }}_v${{ steps.control.outputs.VERSION }}
+                  path: |
+                      ./packages/${{ steps.control.outputs.PACKAGE }}_${{ steps.control.outputs.VERSION }}_iphoneos-arm.deb
+                      ./packages/${{ steps.control.outputs.PACKAGE }}_${{ steps.control.outputs.VERSION }}_iphoneos-arm64.deb
+
+            - name: Create GitHub Release
+              uses: actions/create-release@main
+              with:
+                  tag_name: v${{ steps.control.outputs.VERSION }}
+                  release_name: Release v${{ steps.control.outputs.VERSION }}
+                  body: |
+                      iphoneos-arm:
+                      MD5sum: ${{ steps.hashes.outputs.MD5SUM_ARM }}
+                      SHA1: ${{ steps.hashes.outputs.SHA1_ARM }}
+                      SHA256: ${{ steps.hashes.outputs.SHA256_ARM }}
+
+                      iphoneos-arm64:
+                      MD5sum: ${{ steps.hashes.outputs.MD5SUM_ARM64 }}
+                      SHA1: ${{ steps.hashes.outputs.SHA1_ARM64 }}
+                      SHA256: ${{ steps.hashes.outputs.SHA256_ARM64 }}
+                  draft: false
+                  prerelease: false
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Upload Release Assets
+              run: |
+                  gh release upload "v${{ steps.control.outputs.VERSION }}" packages/*.deb
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  shell: bash
