@@ -1,4 +1,5 @@
 .theos
-packages/
+.vscode
 .DS_Store
-.dragon
+
+/packages
